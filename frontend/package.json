@@ -3,10 +3,21 @@
   "version": "0.1.0",
   "private": true,
   "dependencies": {
+    "@emotion/react": "^11.14.0",
+    "@emotion/styled": "^11.14.0",
+    "@mui/icons-material": "^6.3.0",
+    "@mui/material": "^6.3.0",
+    "@mui/x-charts": "^7.23.2",
+    "@mui/x-data-grid": "^7.23.3",
+    "@mui/x-date-pickers": "^7.23.3",
+    "@mui/x-tree-view": "^7.23.2",
     "axios": "^1.7.9",
+    "chart.js": "^4.4.7",
     "cra-template": "1.2.0",
-    "react": "^19.0.0",
-    "react-dom": "^19.0.0",
+    "dayjs": "^1.11.13",
+    "react": "^18.2.0",
+    "react-chartjs-2": "^5.2.0",
+    "react-dom": "^18.2.0",
     "react-router-dom": "^7.1.1",
     "react-scripts": "5.0.1"
   },
@@ -22,6 +33,10 @@
       "react-app/jest"
     ]
   },
+  "resolutions": {
+    "react": "18.2.0",
+    "react-dom": "18.2.0"
+  },
   "browserslist": {
     "production": [
       ">0.2%",
@@ -33,5 +48,10 @@
       "last 1 firefox version",
       "last 1 safari version"
     ]
+  },
+  "devDependencies": {
+    "autoprefixer": "^10.4.20",
+    "postcss": "^8.4.49",
+    "tailwindcss": "^3.4.17"
   }
 }

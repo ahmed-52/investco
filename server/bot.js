@@ -7,6 +7,7 @@ const ALPACA_BASE_URL = 'https://paper-api.alpaca.markets';
 const ALPACA_DATA_URL = 'https://data.alpaca.markets/v2';
 
 // Fetch historical data
+// 1. Fetch historical data
 async function fetchHistoricalData(symbol, timeframe, limit) {
   try {
     const response = await axios.get(`${ALPACA_DATA_URL}/stocks/${symbol}/bars`, {
@@ -16,21 +17,25 @@ async function fetchHistoricalData(symbol, timeframe, limit) {
       },
       params: { timeframe, limit },
     });
-    return response.data.bars.map(bar => bar.c); 
+
+    // Return the 'close' prices as an array
+    return response.data.bars.map(bar => bar.c);
+
   } catch (error) {
     console.error('Error fetching historical data:', error.message);
     throw error;
   }
 }
 
-// Calculate moving average
+// 2. Calculate Moving Average
 function calculateMovingAverage(prices, windowSize) {
   if (prices.length < windowSize) return null;
-  const subset = prices.slice(-windowSize); // Get the last `windowSize` prices
-  return subset.reduce((sum, price) => sum + price, 0) / windowSize;
+  const subset = prices.slice(-windowSize);
+  const sum = subset.reduce((acc, price) => acc + price, 0);
+  return sum / windowSize;
 }
 
-// Place an order
+// 3. Place an order
 async function placeOrder(symbol, qty, side, type = 'market', time_in_force = 'gtc') {
   try {
     const response = await axios.post(
@@ -43,43 +48,116 @@ async function placeOrder(symbol, qty, side, type = 'market', time_in_force = 'g
         }
       }
     );
-    console.log(`Order placed: ${side} ${qty} shares of ${symbol}`);
+    console.log(`Order placed: ${side.toUpperCase()} ${qty} shares of ${symbol}`);
     return response.data;
+
   } catch (error) {
-    console.error('Error placing order:', error.message);
+    console.error('Error placing order:', error.response ? error.response.data : error.message);
+    return {
+      error: true,
+      message: error.response ? error.response.data.message : error.message
+    };
+  }
+}
+
+// 4. Check current position for a symbol
+//    Returns the quantity of shares currently held for `symbol`.
+async function getCurrentPositionForSymbol(symbol) {
+  try {
+    const response = await axios.get(`${ALPACA_BASE_URL}/v2/positions/${symbol}`, {
+      headers: {
+        'APCA-API-KEY-ID': ALPACA_API_KEY,
+        'APCA-API-SECRET-KEY': ALPACA_SECRET_KEY,
+      },
+    });
+    // If found, return the current qty
+    return parseFloat(response.data.qty);
+
+  } catch (error) {
+    // If error is 404, it means no position exists for this symbol
+    if (error.response && error.response.status === 404) {
+      return 0;
+    }
+    // Otherwise, re-throw
+    console.error('Error fetching current position:', error.message);
     throw error;
   }
 }
 
-// Trading bot logic
-async function tradingBot(symbol, shortWindow, longWindow) {
-  console.log(`Starting bot for ${symbol} with shortWindow=${shortWindow}, longWindow=${longWindow}`);
-  const limit = longWindow + 1; // Fetch enough data for the long window
+// 5. Main Trading Bot Function
+async function tradingBot(symbol, shortWindow, longWindow, tradeAmount) {
+  console.log(`\n[Bot] Checking symbol ${symbol} | shortWindow=${shortWindow}, longWindow=${longWindow}, tradeAmount=${tradeAmount}`);
 
+  const limit = longWindow + 5;  // a bit extra
   try {
-    // Fetch historical data
-    const prices = await fetchHistoricalData(symbol, '1Day', limit);
-    console.log(`Prices for ${symbol}:`, prices);
+    // Step A: Fetch the historical data
+    const prices = await fetchHistoricalData(symbol, '1Min', limit);
+    if (!prices || prices.length < longWindow) {
+      console.log(`[Bot] Not enough data to calculate ${longWindow}-bar SMA. Skipping.`);
+      return;
+    }
 
-    // Calculate moving averages
+    // Step B: Calculate moving averages
     const shortMA = calculateMovingAverage(prices, shortWindow);
     const longMA = calculateMovingAverage(prices, longWindow);
-    console.log(`Short MA: ${shortMA}, Long MA: ${longMA}`);
 
-    // Make trading decisions
-    if (shortMA > longMA) {
-      console.log('Bullish crossover detected, placing BUY order...');
-      await placeOrder(symbol, 1, 'buy');
-    } else if (shortMA < longMA) {
-      console.log('Bearish crossover detected, placing SELL order...');
-      await placeOrder(symbol, 1, 'sell');
-    } else {
-      console.log('No clear signal, holding...');
+    console.log(`[Bot] Short MA: ${shortMA?.toFixed(3)}, Long MA: ${longMA?.toFixed(3)}`);
+
+    // If for some reason either average is null, skip
+    if (!shortMA || !longMA) {
+      console.log(`[Bot] Could not calculate MAs properly. Skipping.`);
+      return;
     }
+
+    // Step C: Current position check
+    const currentPosition = await getCurrentPositionForSymbol(symbol);
+    console.log(`[Bot] Currently holding ${currentPosition} shares of ${symbol}.`);
+
+    // Step D: Determine the latest price
+    const latestPrice = prices[prices.length - 1];
+    if (!latestPrice) {
+      console.log(`[Bot] No latest price found. Skipping.`);
+      return;
+    }
+
+    // Step E: Trading Logic
+    //     - If shortMA > longMA => Bullish signal: Buy IF we have no shares
+    //     - If shortMA < longMA => Bearish signal: Sell IF we have shares
+    //     - Otherwise, hold
+    if (shortMA > longMA) {
+      if (currentPosition === 0) {
+        // Calculate quantity we can buy with tradeAmount
+        const quantity = Math.floor(tradeAmount / latestPrice);
+        if (quantity <= 0) {
+          console.log('[Bot] Not enough tradeAmount to buy even 1 share. Skipping.');
+          return;
+        }
+        console.log(`[Bot] Bullish crossover detected. Placing BUY order for ${quantity} shares...`);
+        await placeOrder(symbol, quantity, 'buy');
+      } else {
+        console.log('[Bot] Bullish signal, but we already hold shares. Doing nothing.');
+      }
+    } else if (shortMA < longMA) {
+      if (currentPosition > 0) {
+        console.log(`[Bot] Bearish crossover detected. Selling all ${currentPosition} shares...`);
+        await placeOrder(symbol, currentPosition, 'sell');
+      } else {
+        console.log('[Bot] Bearish signal, but we do not hold any shares. Doing nothing.');
+      }
+    } else {
+      // MAs are essentially equal
+      console.log('[Bot] No clear crossover signal. Holding position as is.');
+    }
+
   } catch (error) {
-    console.error('Error in bot execution:', error.message);
+    console.error('[Bot] Error in bot execution:', error.message);
   }
 }
 
-// Run the bot (example)
-tradingBot('AAPL', 10, 50); // Apple stock, 10-day vs. 50-day moving average
+module.exports = {
+  fetchHistoricalData,
+  calculateMovingAverage,
+  placeOrder,
+  tradingBot,
+  getCurrentPositionForSymbol
+};
