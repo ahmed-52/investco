@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-d
 import Login from "./auth/login";
 import Register from "./auth/Register";
 import Dashboard from "./Dash";
+import Trading from "./Trading";
 import "./App.css";
 
 // Check if user is authenticated
@@ -47,6 +48,13 @@ function App() {
             </ProtectedRoute>
           }
         />
+        <Route
+          path="/trading"
+          element={
+            <ProtectedRoute>
+              <Trading />
+            </ProtectedRoute>
+          }/>
       </Routes>
     </Router>
   );

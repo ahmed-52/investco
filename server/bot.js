@@ -160,4 +160,4 @@ module.exports = {
   placeOrder,
   tradingBot,
   getCurrentPositionForSymbol
-};
+}

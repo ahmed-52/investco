@@ -4,7 +4,11 @@ module.exports = {
     "./src/**/*.{js,jsx,ts,tsx}", // Include all React files
   ],
   theme: {
-    extend: {},
+    extend: {
+      fontFamily: {
+        'space': ['"Space Mono"', 'monospace'],
+      },
+    },
   },
   plugins: [],
 };

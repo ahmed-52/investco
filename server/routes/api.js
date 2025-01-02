@@ -100,12 +100,16 @@ router.get('/portfolio', async (req, res) => {
   }
 });
 
-// 3. Route: Start Trading Bot
+
+
+
 router.post('/bot/start', async (req, res) => {
-  const { symbol, shortWindow, longWindow, tradeAmount } = req.body;
-  if (!symbol || !shortWindow || !longWindow || !tradeAmount) {
+  const { symbol, shortWindow, longWindow, tradeAmount, strategy } = req.body;
+
+  // 1. Validate request
+  if (!symbol || !shortWindow || !longWindow || !tradeAmount || !strategy) {
     return res.status(400).json({
-      message: 'All fields (symbol, shortWindow, longWindow, tradeAmount) are required'
+      message: 'All fields (symbol, shortWindow, longWindow, tradeAmount, strategy) are required'
     });
   }
 
@@ -117,29 +121,48 @@ router.post('/bot/start', async (req, res) => {
 
   if (botIntervalId) {
     return res.status(400).json({
-      message: 'Bot is already running'
+      message: 'Bot is already running (in-memory).'
     });
   }
 
   try {
-    // Validate symbol
+    // 2. Validate symbol with Alpaca
     const symbolIsValid = await isValidSymbol(symbol);
     if (!symbolIsValid) {
       return res.status(400).json({ message: `Invalid symbol: ${symbol}` });
     }
 
+    // 3. Check DB if there's already a row for this symbol with status=running
+    const row = db.prepare('SELECT * FROM bot WHERE symbol = ?').get(symbol);
+    if (row && row.status === 'running') {
+      return res.status(400).json({
+        message: `Bot for symbol ${symbol} is already running in the DB!`
+      });
+    }
 
-    // Start the bot’s interval
+    // 4. Upsert the row into `bot` table: set status=running, etc.
+    // For simplicity, let's do a two-step approach: delete existing, then insert a fresh row
+    // or you can do an actual SQL "INSERT OR REPLACE" if you'd like.
+    db.prepare('DELETE FROM bot WHERE symbol = ?').run(symbol);
+    db.prepare(`
+      INSERT INTO bot (symbol, status, initial_balance, long_interval, short_interval, strategy, trade_amount)
+      VALUES (@symbol, @status, @initial_balance, @long_interval, @short_interval, @strategy, @trade_amount)
+    `).run({
+      symbol,
+      status: 'running',
+      initial_balance: 0, // or pass something from your logic
+      long_interval: longWindow,
+      short_interval: shortWindow,
+      strategy,
+      trade_amount: tradeAmount
+    });
+
+    // 5. Start the in-memory interval
     botIntervalId = setInterval(async () => {
-      // Only trade during market hours if you like
-      // if (!isMarketOpen()) {
-      //   console.log("[Bot] Market is closed, skipping this cycle.");
-      //   return;
-      // }
       await tradingBot(symbol, parseInt(shortWindow), parseInt(longWindow), parseFloat(tradeAmount));
     }, 60_000);
 
-    res.json({ message: 'Bot started successfully' });
+    return res.json({ message: `Bot for ${symbol} started successfully` });
 
   } catch (error) {
     console.error("Error starting bot:", error);
@@ -147,18 +170,85 @@ router.post('/bot/start', async (req, res) => {
   }
 });
 
+
+
 // 4. Route: Stop Trading Bot
+// routes/trading.js
+
 router.post('/bot/stop', (req, res) => {
+
+
   if (!botIntervalId) {
-    return res.status(400).json({
-      message: 'No bot is currently running'
-    });
+    return res.status(400).json({ message: 'No bot is currently running (in-memory).' });
   }
 
   clearInterval(botIntervalId);
   botIntervalId = null;
-  res.json({ message: 'Bot stopped successfully' });
+
+  db.prepare('UPDATE bot SET status = ? WHERE status = ?').run('stopped', 'running');
+
+  return res.json({ message: 'Bot stopped successfully' });
 });
+
+
+
+router.get('/bot/status', async (req, res) => {
+  try {
+    // 1) Check if we have an in-memory interval reference
+    //    This is a quick check to see if the bot is running in code.
+    //    If you're allowing multiple bots, store them in an object/dict by symbol.
+    if (!botIntervalId) {
+      return res.json(false); 
+      // If you prefer a more descriptive object, do:
+      // return res.json({ isBotRunning: false });
+    }
+
+    // 2) Fetch the current bot row from the database
+    //    For simplicity, let's assume you only allow 1 bot at a time.
+    const row = db.prepare(`
+      SELECT * 
+      FROM bot
+      WHERE status = 'running'
+      LIMIT 1
+    `).get();
+
+    // If there's no row in DB, treat it as "no bot running"
+    if (!row) {
+      return res.json(false);
+    }
+
+    // 3) Retrieve the Alpaca account balance
+    const accountResponse = await axios.get(`${ALPACA_BASE_URL}/v2/account`, {
+      headers: {
+        'APCA-API-KEY-ID': ALPACA_API_KEY,
+        'APCA-API-SECRET-KEY': ALPACA_SECRET_KEY,
+      },
+    });
+    const { cash, buying_power, equity } = accountResponse.data;
+
+    // 4) Format the response similar to your Figma design:
+    const responseData = {
+      tickerTrading: row.symbol,             // e.g. "$RKLB"
+      balance: Number(equity).toFixed(2),    // e.g. 52405 -> "52405.00"
+      strategy: row.strategy,                // e.g. "Moving Average"
+      shortTermInterval: row.short_interval, // e.g. 10
+      longTermInterval: row.long_interval,   // e.g. 100
+      startAmount: row.trade_amount,         // e.g. 40000 (or however you stored it)
+      status: row.status,                    // e.g. "running"
+    };
+
+    // 5) Return the JSON
+    return res.json(responseData);
+
+  } catch (error) {
+    console.error('Error getting bot status:', error.message);
+    return res.status(500).json({ error: 'Failed to get bot status' });
+  }
+});
+
+
+
+
 
 // 5. Route: Get Historical Data
 router.get('/historical/:symbol', async (req, res) => {
