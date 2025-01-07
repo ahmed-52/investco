@@ -1,4 +1,87 @@
+import api from "./api";
+import Positions from "./Chart"
+import { useEffect, useState } from "react";
+
 const Trading = () => {
+
+
+    const [botRunning, setBotRunning] = useState(false);
+    const [symbol, setSymbol] = useState("");
+    const [strategy, setStrategy] = useState("");
+    const [shortTermInterval, setShortTermInterval] = useState(null);
+    const [longTermInterval, setLongTermInterval] = useState(null);
+    const [startAmount, setStartAmount] = useState(0);
+    const [allocated, setAllocated] = useState(0);
+    const [statusText, setStatusText] = useState("Idle");
+    const [balance, setBalance] = useState(null);
+  
+    useEffect(() => {
+      const fetchBotStatus = async () => {
+        try {
+          const res = await api.get("/api/bot/status");
+          if (res.data === false) {
+            setBotRunning(false);
+            setStatusText("Inactive");
+            setSymbol("");
+            setStrategy("");
+            setShortTermInterval(null);
+            setLongTermInterval(null);
+            setStartAmount(0);
+            setAllocated(0);
+          } else {
+
+            setBotRunning(true);
+            setStatusText("Active");
+            setSymbol(res.data.tickerTrading || "");
+            setStrategy(res.data.strategy || "");
+            setShortTermInterval(res.data.shortTermInterval || 0);
+            setLongTermInterval(res.data.longTermInterval || 0);
+            setStartAmount(res.data.startAmount || 0);
+            setAllocated(res.data.allocated || 0);
+          }
+        } catch (error) {
+          console.error("Error fetching bot status:", error);
+          setBotRunning(false);
+          setStatusText("Error fetching bot status");
+        }
+      };
+      const fetchBalance = async () => {
+        try {
+          const response = await api.get("/api/balance");
+          setBalance(response.data);
+        } catch (err) {
+          console.error("Error fetching balance:", err);
+        }
+      };
+  
+      fetchBotStatus();
+      fetchBalance();
+    }, []);
+
+    function formatBalance(balance) {
+      const formattedBalance = {};
+    
+      for (const key in balance) {
+        if (balance.hasOwnProperty(key)) {
+          const value = balance[key];
+          // Convert string to number before formatting
+          if (!isNaN(value)) {
+            formattedBalance[key] = Number(value).toLocaleString('en-US', {
+              minimumFractionDigits: 2, // Keep two decimal places
+              maximumFractionDigits: 2,
+            });
+          } else {
+            formattedBalance[key] = value; // Keep non-numeric values unchanged
+          }
+        }
+      }
+    
+      return formattedBalance;
+    }
+
+    const balance2 = formatBalance(balance);
+    console.log(balance2);
+
     return (
         <div className="flex w-full h-screen">
             <aside className="bg-[#eeeeee] basis-[10%] shrink-0 h-full">
@@ -18,52 +101,51 @@ const Trading = () => {
         
         {/* Portfolio block */}
         <div className="bg-gray-100 p-4">
-          <h2 className="text-lg font-bold mb-3">Your Portfolio</h2>
-          <div className="bg-gray-300 h-52 flex items-center justify-center">
-            <span>Goal is to display a chart</span>
+          <h2 className="text-lg font-bold mb-3 font-space">Your Portfolio</h2>
+          <div className="bg-gray-300 h-52 ">
+            <Positions/>
           </div>
         </div>
         
         {/* Balance block */}
         <div className="bg-gray-100 p-4">
-          <h2 className="text-lg font-bold mb-3">Balance</h2>
+          <h2 className="text-lg font-bold mb-3 font-space">Balance</h2>
           <div className="grid grid-cols-3 gap-4">
             {/* Cash */}
             <div className="text-center">
-              <p className="text-2xl font-bold">$189k</p>
-              <p className="text-sm">Cash</p>
+              <p className="text-2xl font-bold font-space">${balance2.cash}</p>
+              <p className="text-sm font-space">Cash</p>
             </div>
             {/* Buying Power */}
             <div className="text-center">
-              <p className="text-2xl font-bold">$89k</p>
-              <p className="text-sm">Buying Power</p>
+              <p className="text-2xl font-bold font-space">${balance2.buying_power}</p>
+              <p className="text-sm font-space">Buying Power</p>
             </div>
             {/* Daily Change */}
             <div className="text-center">
-              <p className="text-2xl font-bold">- $1040</p>
-              <p className="text-sm">Daily Change</p>
+              <p className="text-2xl font-bold font-space">${balance2.equity}</p>
+              <p className="text-sm font-space">Eauity</p>
             </div>
           </div>
         </div>
       </div>
 
-      {/* RIGHT COLUMN: Trading Bot (full height) */}
       <div className="bg-gray-100 p-4 flex flex-col">
         {/* Header: Title + Status */}
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-bold">Trading Bot</h2>
-          <span className="text-green-600 font-bold">Active</span>
+          <span className="text-green-600 font-bold">{statusText}</span>
         </div>
 
         {/* Bot info row */}
         <div className="flex flex-wrap gap-x-8 gap-y-2">
           <div>
             <p className="uppercase text-xs">Ticker Trading</p>
-            <p className="text-xl font-bold">$RKLB</p>
+            <p className="text-xl font-bold">{symbol}</p>
           </div>
           <div>
             <p className="uppercase text-xs">Balance</p>
-            <p className="text-xl font-bold">$52,405</p>
+            <p className="text-xl font-bold">{allocated}</p>
           </div>
           <div>
             <p className="uppercase text-xs">Strategy</p>
@@ -75,18 +157,18 @@ const Trading = () => {
         <div className="flex gap-x-8 mt-4">
           <div>
             <p className="uppercase text-xs">Short-Term Interval</p>
-            <p className="text-xl font-bold">10s</p>
+            <p className="text-xl font-bold">{longTermInterval}</p>
           </div>
           <div>
             <p className="uppercase text-xs">Long-Term Interval</p>
-            <p className="text-xl font-bold">1000s</p>
+            <p className="text-xl font-bold">{shortTermInterval}</p>
           </div>
         </div>
 
         {/* Start Amount */}
         <div className="mt-4">
           <p className="uppercase text-xs">Start Amount</p>
-          <p className="text-xl font-bold">$40k</p>
+          <p className="text-xl font-bold">{startAmount}</p>
         </div>
 
         {/* Stop Bot button */}
@@ -102,7 +184,57 @@ const Trading = () => {
           <p className="text-sm">[Bot] Bullish signal, but we already hold shares. Doing nothing.</p>
         </div>
       </div>
-    </div>
+          </div>
+
+
+
+          <div className="bg-white p-4 mt-6 shadow rounded">
+          <h2 className="text-lg font-bold mb-3">Trade Stocks</h2>
+          <form className="flex flex-col gap-4">
+            {/* Symbol Input */}
+            <div>
+              <label className="text-sm font-medium" htmlFor="tradeSymbol">
+                Symbol
+              </label>
+              <input
+                id="tradeSymbol"
+                type="text"
+                className="border border-gray-300 rounded w-full px-2 py-1"
+                placeholder="Enter stock symbol (e.g., AAPL)"
+              />
+            </div>
+
+            {/* Quantity Input */}
+            <div>
+              <label className="text-sm font-medium" htmlFor="tradeQty">
+                Quantity
+              </label>
+              <input
+                id="tradeQty"
+                type="number"
+                className="border border-gray-300 rounded w-full px-2 py-1"
+                placeholder="Enter quantity"
+              />
+            </div>
+
+            {/* Buy/Sell Buttons */}
+            <div className="flex gap-4">
+              <button
+                type="button"
+                className="bg-green-600 text-white px-4 py-2 rounded"
+              >
+                Buy
+              </button>
+              <button
+                type="button"
+                className="bg-red-600 text-white px-4 py-2 rounded"
+              >
+                Sell
+              </button>
+            </div>
+          </form>
+        </div>
+
 
 
             </main>

@@ -18,6 +18,8 @@ async function fetchHistoricalData(symbol, timeframe, limit) {
       params: { timeframe, limit },
     });
 
+    console.log("Full response from Alpaca:", response.data);
+
     // Return the 'close' prices as an array
     return response.data.bars.map(bar => bar.c);
 
@@ -91,7 +93,7 @@ async function tradingBot(symbol, shortWindow, longWindow, tradeAmount) {
   const limit = longWindow + 5;  // a bit extra
   try {
     // Step A: Fetch the historical data
-    const prices = await fetchHistoricalData(symbol, '1Min', limit);
+    const prices = await fetchHistoricalData(symbol, '1Hour', limit);
     if (!prices || prices.length < longWindow) {
       console.log(`[Bot] Not enough data to calculate ${longWindow}-bar SMA. Skipping.`);
       return;

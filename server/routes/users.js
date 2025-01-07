@@ -31,40 +31,41 @@ router.post('/register', async (req, res) => {
   });
 });
 
-router.post('/login', async(req,res) =>{
+router.post('/login', async (req, res) => {
+  const { user, pass } = req.body;
+  console.log(user);
 
-
-const {user, pass} = req.body;
-console.log(user)
-
-if (!user || !pass) {
-    return res.status(400).json({message:"Must provide a username and a password"});
-}
-
-
-const loginQuery = 'SELECT * FROM users WHERE username =?';
-db.get(loginQuery,[user], async(err,dbUser) => {
-  
-  if(err){
-    console.error("Database Error",err)
-    return res.status(500).json({message:"Database error"})
+  if (!user || !pass) {
+    return res.status(400).json({ message: "Must provide a username and a password" });
   }
-if(!dbUser) {res.status(400).json({message:'Invaild Username or Password'})}
 
-const isPassValid = bcrypt.compare(pass,dbUser.password);
-if(!isPassValid) {res.status(400).json({message:'Invalid password or username'})}
+  const loginQuery = 'SELECT * FROM users WHERE username = ?';
+  db.get(loginQuery, [user], async (err, dbUser) => {
+    if (err) {
+      console.error("Database Error", err);
+      return res.status(500).json({ message: "Database error" });
+    }
 
+    // Check if the user exists
+    if (!dbUser) {
+      console.log("User not found");
+      return res.status(400).json({ message: 'Invalid username or password' });
+    }
 
-const secretKey = process.env.JWT_SECRET;
+    // Validate the password
+    const isPassValid = await bcrypt.compare(pass, dbUser.password); // Added `await`
+    if (!isPassValid) {
+      return res.status(400).json({ message: 'Invalid username or password' });
+    }
 
-const token = jwt.sign({ id: dbUser.id }, secretKey,{expiresIn:'1h'})
+    // Generate a token
+    const secretKey = process.env.JWT_SECRET;
+    const token = jwt.sign({ id: dbUser.id }, secretKey, { expiresIn: '1h' });
 
-res.json({token})
-
+    res.json({ token });
+  });
 });
 
-
-});
 
 
 module.exports = router;

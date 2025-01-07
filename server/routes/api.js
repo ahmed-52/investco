@@ -1,5 +1,6 @@
 const express = require('express');
 const router = express.Router();
+const db = require('../db'); 
 const axios = require('axios');
 require('dotenv').config();
 const {
@@ -10,9 +11,11 @@ const {
   getCurrentPositionForSymbol
 } = require('../bot.js');
 
+
 const ALPACA_API_KEY = process.env.API;
 const ALPACA_SECRET_KEY = process.env.SECRET;
 const ALPACA_BASE_URL = 'https://paper-api.alpaca.markets';
+const FINNHUB_API_KEY = process.env.FINHUB;
 
 
 
@@ -103,81 +106,103 @@ router.get('/portfolio', async (req, res) => {
 
 
 
+
 router.post('/bot/start', async (req, res) => {
-  const { symbol, shortWindow, longWindow, tradeAmount, strategy } = req.body;
+  console.log("[/bot/start] Request body:", req.body);
+
+  const { symbol, shortWindow, longWindow, tradeAmount } = req.body;
 
   // 1. Validate request
-  if (!symbol || !shortWindow || !longWindow || !tradeAmount || !strategy) {
+  if (!symbol || !shortWindow || !longWindow || !tradeAmount) {
+    console.log("[/bot/start] Missing required fields:", { symbol, shortWindow, longWindow, tradeAmount });
     return res.status(400).json({
-      message: 'All fields (symbol, shortWindow, longWindow, tradeAmount, strategy) are required'
+      message: 'All fields (symbol, shortWindow, longWindow, tradeAmount) are required'
     });
   }
 
   if (tradeAmount <= 0) {
+    console.log("[/bot/start] Invalid tradeAmount:", tradeAmount);
     return res.status(400).json({
       message: 'Trade amount must be greater than zero'
     });
   }
 
   if (botIntervalId) {
+    console.log("[/bot/start] Bot is already running in-memory (botIntervalId is set).");
     return res.status(400).json({
       message: 'Bot is already running (in-memory).'
     });
   }
 
   try {
-    // 2. Validate symbol with Alpaca
+    // 2. Validate symbol with Alpaca (this is an async call, so we await it)
+    console.log("[/bot/start] Validating symbol with Alpaca:", symbol);
     const symbolIsValid = await isValidSymbol(symbol);
+    console.log("[/bot/start] symbolIsValid result:", symbolIsValid);
     if (!symbolIsValid) {
+      console.log("[/bot/start] Symbol is invalid:", symbol);
       return res.status(400).json({ message: `Invalid symbol: ${symbol}` });
     }
 
     // 3. Check DB if there's already a row for this symbol with status=running
-    const row = db.prepare('SELECT * FROM bot WHERE symbol = ?').get(symbol);
-    if (row && row.status === 'running') {
-      return res.status(400).json({
-        message: `Bot for symbol ${symbol} is already running in the DB!`
-      });
-    }
+    console.log("[/bot/start] Checking DB for existing row with symbol:", symbol);
 
-    // 4. Upsert the row into `bot` table: set status=running, etc.
-    // For simplicity, let's do a two-step approach: delete existing, then insert a fresh row
-    // or you can do an actual SQL "INSERT OR REPLACE" if you'd like.
-    db.prepare('DELETE FROM bot WHERE symbol = ?').run(symbol);
-    db.prepare(`
-      INSERT INTO bot (symbol, status, initial_balance, long_interval, short_interval, strategy, trade_amount)
-      VALUES (@symbol, @status, @initial_balance, @long_interval, @short_interval, @strategy, @trade_amount)
-    `).run({
-      symbol,
-      status: 'running',
-      initial_balance: 0, // or pass something from your logic
-      long_interval: longWindow,
-      short_interval: shortWindow,
-      strategy,
-      trade_amount: tradeAmount
-    });
+    db.get('SELECT * FROM bot WHERE symbol = ?', [symbol], (err, existingRow) => {
+      if (err) {
+        console.error("[/bot/start] Error selecting row:", err);
+        return res.status(500).json({ message: 'Database error (select)' });
+      }
 
-    // 5. Start the in-memory interval
-    botIntervalId = setInterval(async () => {
-      await tradingBot(symbol, parseInt(shortWindow), parseInt(longWindow), parseFloat(tradeAmount));
-    }, 60_000);
 
-    return res.json({ message: `Bot for ${symbol} started successfully` });
+      console.log("[/bot/start] Deleting any existing row for symbol:", symbol);
+      db.run('DELETE FROM bot WHERE symbol = ?', [symbol], (deleteErr) => {
+        if (deleteErr) {
+          console.error("[/bot/start] Error deleting row:", deleteErr);
+          return res.status(500).json({ message: 'Database error (delete)' });
+        }
 
+        console.log("[/bot/start] Inserting new row for symbol:", symbol);
+        const insertQuery = `
+          INSERT INTO bot (
+            symbol, status, initial_balance, long_interval, short_interval, strategy, trade_amount
+          ) VALUES (?, ?, ?, ?, ?, ?, ?)
+        `;
+        const strategy = 'moving_average';
+
+        db.run(insertQuery, [
+          symbol,
+          'running',
+          tradeAmount,
+          longWindow,
+          shortWindow,
+          strategy,
+          tradeAmount
+        ], function(insertErr) {
+          if (insertErr) {
+            console.error("[/bot/start] Error inserting row:", insertErr);
+            return res.status(500).json({ message: 'Database error (insert)' });
+          }
+
+   
+          console.log("[/bot/start] Starting interval for tradingBot...");
+          botIntervalId = setInterval(async () => {
+            console.log("[botInterval] Executing tradingBot...");
+            await tradingBot(symbol, parseInt(shortWindow), parseInt(longWindow), parseFloat(tradeAmount));
+          }, 60_000);
+
+          console.log("[/bot/start] Bot started successfully for symbol:", symbol);
+          return res.json({ message: `Bot for ${symbol} started successfully` });
+        }); // end db.run (insert)
+      }); // end db.run (delete)
+    }); // end db.get
   } catch (error) {
-    console.error("Error starting bot:", error);
+    console.error("[/bot/start] Error starting bot:", error);
     return res.status(500).json({ message: 'Error starting bot' });
   }
 });
 
 
-
-// 4. Route: Stop Trading Bot
-// routes/trading.js
-
 router.post('/bot/stop', (req, res) => {
-
-
   if (!botIntervalId) {
     return res.status(400).json({ message: 'No bot is currently running (in-memory).' });
   }
@@ -185,10 +210,16 @@ router.post('/bot/stop', (req, res) => {
   clearInterval(botIntervalId);
   botIntervalId = null;
 
-  db.prepare('UPDATE bot SET status = ? WHERE status = ?').run('stopped', 'running');
+  db.run('UPDATE bot SET status = ? WHERE status = ?', ['stopped', 'running'], function(err) {
+    if (err) {
+      console.error("[/bot/stop] Error updating row:", err);
+      return res.status(500).json({ message: 'Database error (update)' });
+    }
 
-  return res.json({ message: 'Bot stopped successfully' });
+    return res.json({ message: 'Bot stopped successfully' });
+  });
 });
+
 
 
 
@@ -199,12 +230,8 @@ router.get('/bot/status', async (req, res) => {
     //    If you're allowing multiple bots, store them in an object/dict by symbol.
     if (!botIntervalId) {
       return res.json(false); 
-      // If you prefer a more descriptive object, do:
-      // return res.json({ isBotRunning: false });
     }
 
-    // 2) Fetch the current bot row from the database
-    //    For simplicity, let's assume you only allow 1 bot at a time.
     const row = db.prepare(`
       SELECT * 
       FROM bot
@@ -218,26 +245,41 @@ router.get('/bot/status', async (req, res) => {
     }
 
     // 3) Retrieve the Alpaca account balance
-    const accountResponse = await axios.get(`${ALPACA_BASE_URL}/v2/account`, {
-      headers: {
-        'APCA-API-KEY-ID': ALPACA_API_KEY,
-        'APCA-API-SECRET-KEY': ALPACA_SECRET_KEY,
-      },
-    });
-    const { cash, buying_power, equity } = accountResponse.data;
+    let marketValue = 0;
+    try {
+      const positionResponse = await axios.get(
+        `${ALPACA_BASE_URL}/v2/positions/${row.symbol}`,
+        {
+          headers: {
+            'APCA-API-KEY-ID': ALPACA_API_KEY,
+            'APCA-API-SECRET-KEY': ALPACA_SECRET_KEY,
+          },
+        }
+      );
 
-    // 4) Format the response similar to your Figma design:
+      // Alpaca's positions response includes `market_value`
+      marketValue = parseFloat(positionResponse.data.market_value); 
+    } catch (positionError) {
+      // If we have no position for this symbol, the server returns 404
+      if (positionError.response && positionError.response.status === 404) {
+        marketValue = 0; // means we have no position in that symbol
+      } else {
+        // Other errors should be thrown
+        throw positionError;
+      }
+    }
+
     const responseData = {
-      tickerTrading: row.symbol,             // e.g. "$RKLB"
-      balance: Number(equity).toFixed(2),    // e.g. 52405 -> "52405.00"
-      strategy: row.strategy,                // e.g. "Moving Average"
-      shortTermInterval: row.short_interval, // e.g. 10
-      longTermInterval: row.long_interval,   // e.g. 100
-      startAmount: row.trade_amount,         // e.g. 40000 (or however you stored it)
-      status: row.status,                    // e.g. "running"
+      tickerTrading: row.symbol,             
+      balance: marketValue,   
+      strategy: row.strategy,                
+      shortTermInterval: row.short_interval, 
+      longTermInterval: row.long_interval,  
+      startAmount: row.initial_balance,         
+      status: row.status,                   
     };
 
-    // 5) Return the JSON
+
     return res.json(responseData);
 
   } catch (error) {
@@ -272,21 +314,6 @@ router.get('/historical/:symbol', async (req, res) => {
   }
 });
 
-// 6. Route: Get Market News
-router.get('/news', async (req, res) => {
-  try {
-    const response = await axios.get(`${ALPACA_BASE_URL}/v2/news`, {
-      headers: {
-        'APCA-API-KEY-ID': ALPACA_API_KEY,
-        'APCA-API-SECRET-KEY': ALPACA_SECRET_KEY,
-      },
-    });
-    res.json(response.data);
-  } catch (error) {
-    console.error('Error fetching market news:', error.message);
-    res.status(500).json({ error: 'Failed to fetch market news' });
-  }
-});
 
 // 7. Route: Place an Order (Manual)
 router.post('/order', async (req, res) => {
