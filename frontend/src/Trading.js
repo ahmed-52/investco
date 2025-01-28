@@ -19,6 +19,10 @@ const Trading = () => {
       const fetchBotStatus = async () => {
         try {
           const res = await api.get("/api/bot/status");
+
+
+          console.log("Bot status data:", res.data);
+
           if (res.data === false) {
             setBotRunning(false);
             setStatusText("Inactive");
@@ -32,12 +36,12 @@ const Trading = () => {
 
             setBotRunning(true);
             setStatusText("Active");
-            setSymbol(res.data.tickerTrading || "");
+            setSymbol(res.data.symbol || "");
             setStrategy(res.data.strategy || "");
-            setShortTermInterval(res.data.shortTermInterval || 0);
-            setLongTermInterval(res.data.longTermInterval || 0);
-            setStartAmount(res.data.startAmount || 0);
-            setAllocated(res.data.allocated || 0);
+            setShortTermInterval(res.data.short_interval || 0);
+            setLongTermInterval(res.data.long_interval || 0);
+            setStartAmount(res.data.initial_balance || 0);
+            setAllocated(res.data.marketValue || 0);
           }
         } catch (error) {
           console.error("Error fetching bot status:", error);
@@ -57,6 +61,51 @@ const Trading = () => {
       fetchBotStatus();
       fetchBalance();
     }, []);
+
+    const [form, setForm] = useState({
+      ticker: "",
+      shortInterval: "",
+      longInterval: "",
+      amount: "",
+    });
+
+
+    // functions to start and stop the trading bot
+
+
+    const startBot = async () => {
+      try {
+        setStatusText("Starting...");
+        const { ticker, shortInterval, longInterval, amount } = form;
+        const response = await api.post("/api/bot/start", {
+          symbol: ticker,
+          shortWindow: parseInt(shortInterval),
+          longWindow: parseInt(longInterval),
+          tradeAmount: parseFloat(amount),
+        });
+        alert(response.data.message);
+        setBotRunning(true);
+        setStatusText("Active");
+      } catch (err) {
+        console.error("Error starting bot:", err);
+        setStatusText("Idle");
+      }
+    };
+    
+    const stopBot = async () => {
+      try {
+        const response = await api.post("/api/bot/stop");
+        alert(response.data.message);
+        setBotRunning(false);
+        setStatusText("Idle");
+      } catch (err) {
+        console.error("Error stopping bot:", err);
+      }
+    };
+
+
+
+
 
     function formatBalance(balance) {
       const formattedBalance = {};
@@ -80,7 +129,7 @@ const Trading = () => {
     }
 
     const balance2 = formatBalance(balance);
-    console.log(balance2);
+    // console.log(balance2);
 
     return (
         <div className="flex w-full h-screen">
@@ -101,11 +150,13 @@ const Trading = () => {
         
         {/* Portfolio block */}
         <div className="bg-gray-100 p-4">
-          <h2 className="text-lg font-bold mb-3 font-space">Your Portfolio</h2>
-          <div className="bg-gray-300 h-52 ">
-            <Positions/>
-          </div>
-        </div>
+  <h2 className="text-lg font-bold mb-3 font-space">Your Portfolio</h2>
+
+      <div className="bg-gray-300 h-52 overflow-y-scroll">
+        <Positions />
+      </div>
+    </div>
+
         
         {/* Balance block */}
         <div className="bg-gray-100 p-4">
@@ -137,24 +188,25 @@ const Trading = () => {
           <span className="text-green-600 font-bold">{statusText}</span>
         </div>
 
-        {/* Bot info row */}
+        {statusText === "Active" ? (
+                <>
+      
         <div className="flex flex-wrap gap-x-8 gap-y-2">
-          <div>
-            <p className="uppercase text-xs">Ticker Trading</p>
-            <p className="text-xl font-bold">{symbol}</p>
-          </div>
-          <div>
-            <p className="uppercase text-xs">Balance</p>
-            <p className="text-xl font-bold">{allocated}</p>
-          </div>
-          <div>
-            <p className="uppercase text-xs">Strategy</p>
-            <p className="text-xl font-bold">Moving Average</p>
-          </div>
+        <div>
+          <p className="uppercase text-xs">Ticker Trading</p>
+          <p className="text-xl font-bold">{symbol}</p>
         </div>
+        <div>
+          <p className="uppercase text-xs">Balance</p>
+          <p className="text-xl font-bold">{allocated}</p>
+        </div>
+        <div>
+          <p className="uppercase text-xs">Strategy</p>
+          <p className="text-xl font-bold">Moving Average</p>
+        </div>
+      </div>
 
-        {/* Intervals row */}
-        <div className="flex gap-x-8 mt-4">
+      <div className="flex gap-x-8 mt-4">
           <div>
             <p className="uppercase text-xs">Short-Term Interval</p>
             <p className="text-xl font-bold">{longTermInterval}</p>
@@ -165,16 +217,113 @@ const Trading = () => {
           </div>
         </div>
 
-        {/* Start Amount */}
-        <div className="mt-4">
+           {/* Start Amount */}
+           <div className="mt-4">
           <p className="uppercase text-xs">Start Amount</p>
           <p className="text-xl font-bold">{startAmount}</p>
         </div>
 
+
+      </> ) : 
+      ( <>
+        {/* Form to Start Bot */}
+        <form className="grid grid-cols-1 gap-6">
+          {/* Stock Symbol */}
+          <div>
+            <label htmlFor="botSymbol" className="block text-xs text-gray-500 uppercase mb-1">
+              Stock Symbol
+            </label>
+            <input
+              id="botSymbol"
+              type="text"
+              className="w-full border border-gray-300 rounded-lg px-4 py-2 text-gray-800 focus:outline-none focus:ring-2 focus:ring-green-400"
+              placeholder="Enter stock symbol (e.g., TSLA)"
+              name="ticker"
+              value={form.ticker}
+              onChange={(e) =>
+                setForm((prevForm) => ({ ...prevForm, [e.target.name]: e.target.value }))
+              }
+            />
+          </div>
+  
+          {/* Short Interval */}
+          <div>
+            <label htmlFor="shortInterval" className="block text-xs text-gray-500 uppercase mb-1">
+              Short-Term Interval (s)
+            </label>
+            <input
+              id="shortInterval"
+              type="number"
+              className="w-full border border-gray-300 rounded-lg px-4 py-2 text-gray-800 focus:outline-none focus:ring-2 focus:ring-green-400"
+              placeholder="Enter short-term interval"
+              name="shortInterval"
+              value={form.shortInterval}
+              onChange={(e) =>
+                setForm((prevForm) => ({ ...prevForm, [e.target.name]: e.target.value }))
+              }
+            />
+          </div>
+  
+          {/* Long Interval */}
+          <div>
+            <label htmlFor="longInterval" className="block text-xs text-gray-500 uppercase mb-1">
+              Long-Term Interval (s)
+            </label>
+            <input
+              id="longInterval"
+              type="number"
+              className="w-full border border-gray-300 rounded-lg px-4 py-2 text-gray-800 focus:outline-none focus:ring-2 focus:ring-green-400"
+              placeholder="Enter long-term interval"
+              name="longInterval"
+              value={form.longInterval}
+              onChange={(e) =>
+                setForm((prevForm) => ({ ...prevForm, [e.target.name]: e.target.value }))
+              }
+            />
+          </div>
+  
+          <div>
+            <label htmlFor="tradeAmount" className="block text-xs text-gray-500 uppercase mb-1">
+              Starting Amount ($)
+            </label>
+            <input
+              id="tradeAmount"
+              type="number"
+              className="w-full border border-gray-300 rounded-lg px-4 py-2 text-gray-800 focus:outline-none focus:ring-2 focus:ring-green-400"
+              placeholder="Enter starting amount"
+              name="amount"
+              value={form.amount}
+              onChange={(e) =>
+                setForm((prevForm) => ({ ...prevForm, [e.target.name]: e.target.value }))
+              }
+            />
+          </div>
+        </form>
+      </>)
+      
+      
+      }
+
+
+     
+
         {/* Stop Bot button */}
-        <button className="bg-red-700 text-white mt-4 px-4 py-2 w-fit">
+
+        
+        {statusText === "Active" ? (
+
+          <button 
+        onClick={stopBot}
+        className="bg-red-700 hover:bg-red-950 rounded-lg text-white mt-4 px-4 py-2 w-fit">
           Stop Bot
+        </button>   ):
+
+         (  <button 
+        onClick={startBot}
+        className="bg-green-700 hover:bg-green-950 rounded-lg text-white mt-4 px-4 py-2 w-fit">
+          Start Bot
         </button>
+            )}
 
         {/* Bot Log (scroll area) */}
         <div className="bg-white mt-4 p-2 flex-1 overflow-y-auto">
