@@ -128,6 +128,7 @@ async function tradingBot(symbol, shortWindow, longWindow, tradeAmount) {
     //     - Otherwise, hold
     if (shortMA > longMA) {
       if (currentPosition === 0) {
+      
         // Calculate quantity we can buy with tradeAmount
         const quantity = Math.floor(tradeAmount / latestPrice);
         if (quantity <= 0) {

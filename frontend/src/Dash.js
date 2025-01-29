@@ -95,7 +95,7 @@ const Dashboard = ({ logout }) => {
         gutterBottom
         sx={{ fontWeight: "bold", textAlign: "center" }}
       >
-        InvestCo Dashboard
+        Kairo Dashboard
       </Typography>
 
       {error && <Alert severity="error">{error}</Alert>}
