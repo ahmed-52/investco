@@ -88,24 +88,76 @@ const Dashboard = ({ logout }) => {
   };
 
   return (
-    <Container maxWidth="lg" sx={{ mt: 4 }}>
+    <Container
+      maxWidth="lg"
+      sx={{
+        mt: 4,
+        mb: 4,
+        // Dark background & white text for the entire container
+        backgroundColor: "#1A1A1E",
+        color: "#FFFFFF",
+        minHeight: "100vh",
+        borderRadius: 2,
+        padding: 4,
+      }}
+    >
       <Typography
         variant="h4"
         component="h1"
         gutterBottom
-        sx={{ fontWeight: "bold", textAlign: "center" }}
+        sx={{ fontWeight: "bold", textAlign: "center", mb: 3 }}
       >
-        InvestCo Dashboard
+        Portfolio
       </Typography>
 
-      {error && <Alert severity="error">{error}</Alert>}
+      {error && (
+        <Alert severity="error" sx={{ mb: 2 }}>
+          {error}
+        </Alert>
+      )}
 
       <Grid container spacing={3}>
-        {/* Account Balance */}
-        <Grid item xs={12} md={6}>
-          <Card>
+        {/* Portfolio Chart (Placeholder) */}
+        <Grid item xs={12} md={8}>
+          <Card
+            sx={{
+              backgroundColor: "#24252A",
+              border: "1px solid #2F3035",
+              color: "#FFF",
+              borderRadius: 2,
+            }}
+          >
             <CardContent>
-              <Typography variant="h6">Account Balance</Typography>
+              <Typography variant="h6" sx={{ mb: 2 }}>
+                Portfolio Chart
+              </Typography>
+              {/* Placeholder for chart */}
+              <Box
+                sx={{
+                  height: 250,
+                  backgroundColor: "#2F3035",
+                  borderRadius: 2,
+                }}
+              />
+            </CardContent>
+          </Card>
+        </Grid>
+
+        {/* Wallet (Account Balance) */}
+        <Grid item xs={12} md={4}>
+          <Card
+            sx={{
+              backgroundColor: "#24252A",
+              border: "1px solid #2F3035",
+              color: "#FFF",
+              borderRadius: 2,
+              height: "100%",
+            }}
+          >
+            <CardContent>
+              <Typography variant="h6" sx={{ mb: 2 }}>
+                Wallet
+              </Typography>
               {balance ? (
                 <Box>
                   <Typography>Cash: ${balance.cash}</Typography>
@@ -113,20 +165,30 @@ const Dashboard = ({ logout }) => {
                   <Typography>Equity: ${balance.equity}</Typography>
                 </Box>
               ) : (
-                <CircularProgress />
+                <CircularProgress sx={{ color: "#FFF" }} />
               )}
             </CardContent>
           </Card>
         </Grid>
 
-        {/* Market Status */}
-        <Grid item xs={12} md={6}>
-          <Card>
+        {/* Market Overview */}
+        <Grid item xs={12} md={4}>
+          <Card
+            sx={{
+              backgroundColor: "#24252A",
+              border: "1px solid #2F3035",
+              color: "#FFF",
+              borderRadius: 2,
+              height: "100%",
+            }}
+          >
             <CardContent>
-              <Typography variant="h6">Market Status</Typography>
+              <Typography variant="h6" sx={{ mb: 2 }}>
+                Market Overview
+              </Typography>
               <Typography
                 sx={{
-                  color: marketStatus === "Open" ? "green" : "red",
+                  color: marketStatus === "Open" ? "#4ADE80" : "#F87171",
                   fontWeight: "bold",
                 }}
               >
@@ -136,44 +198,83 @@ const Dashboard = ({ logout }) => {
           </Card>
         </Grid>
 
-        {/* Trading Robot Status */}
-        <Grid item xs={12} md={6}>
-          <Card>
+        {/* Strategy Panel (Trading Robot Status) */}
+        <Grid item xs={12} md={8}>
+          <Card
+            sx={{
+              backgroundColor: "#24252A",
+              border: "1px solid #2F3035",
+              color: "#FFF",
+              borderRadius: 2,
+              height: "100%",
+            }}
+          >
             <CardContent>
-              <Typography variant="h6">Trading Robot Status</Typography>
-              <Typography>{robotStatus}</Typography>
-              <Button
-                variant="contained"
-                color="success"
-                onClick={startRobot}
-                sx={{ mt: 2 }}
-              >
-                Start Robot
-              </Button>
-              <Button
-                variant="contained"
-                color="error"
-                onClick={stopRobot}
-                sx={{ mt: 2, ml: 2 }}
-              >
-                Stop Robot
-              </Button>
+              <Typography variant="h6" sx={{ mb: 2 }}>
+                Strategy Panel
+              </Typography>
+              <Typography>Robot Status: {robotStatus}</Typography>
+              <Box sx={{ mt: 2 }}>
+                <Button
+                  variant="contained"
+                  onClick={startRobot}
+                  sx={{
+                    backgroundColor: "#4ADE80",
+                    color: "#000",
+                    "&:hover": { backgroundColor: "#3DBA6C" },
+                  }}
+                >
+                  Start Robot
+                </Button>
+                <Button
+                  variant="contained"
+                  onClick={stopRobot}
+                  sx={{
+                    ml: 2,
+                    backgroundColor: "#F87171",
+                    color: "#000",
+                    "&:hover": { backgroundColor: "#E63946" },
+                  }}
+                >
+                  Stop Robot
+                </Button>
+              </Box>
             </CardContent>
           </Card>
         </Grid>
 
-        {/* Trading Robot Form */}
+        {/* Strategy Settings (Trading Robot Form) */}
         <Grid item xs={12}>
-          <Card>
+          <Card
+            sx={{
+              backgroundColor: "#24252A",
+              border: "1px solid #2F3035",
+              color: "#FFF",
+              borderRadius: 2,
+            }}
+          >
             <CardContent>
-              <Typography variant="h6">Start Trading Robot</Typography>
-              <Box component="form" sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+              <Typography variant="h6" sx={{ mb: 2 }}>
+                Set Your Strategy
+              </Typography>
+              <Box
+                component="form"
+                sx={{ display: "flex", flexDirection: "column", gap: 2 }}
+              >
                 <TextField
                   label="Stock Ticker"
                   name="ticker"
                   value={form.ticker}
                   onChange={handleInputChange}
                   required
+                  InputLabelProps={{ style: { color: "#AAA" } }}
+                  inputProps={{ style: { color: "#FFF" } }}
+                  sx={{
+                    "& .MuiOutlinedInput-root": {
+                      "& fieldset": { borderColor: "#444" },
+                      "&:hover fieldset": { borderColor: "#666" },
+                    },
+                  }}
                 />
                 <TextField
                   label="Short-Term Interval"
@@ -182,6 +283,14 @@ const Dashboard = ({ logout }) => {
                   value={form.shortInterval}
                   onChange={handleInputChange}
                   required
+                  InputLabelProps={{ style: { color: "#AAA" } }}
+                  inputProps={{ style: { color: "#FFF" } }}
+                  sx={{
+                    "& .MuiOutlinedInput-root": {
+                      "& fieldset": { borderColor: "#444" },
+                      "&:hover fieldset": { borderColor: "#666" },
+                    },
+                  }}
                 />
                 <TextField
                   label="Long-Term Interval"
@@ -190,6 +299,14 @@ const Dashboard = ({ logout }) => {
                   value={form.longInterval}
                   onChange={handleInputChange}
                   required
+                  InputLabelProps={{ style: { color: "#AAA" } }}
+                  inputProps={{ style: { color: "#FFF" } }}
+                  sx={{
+                    "& .MuiOutlinedInput-root": {
+                      "& fieldset": { borderColor: "#444" },
+                      "&:hover fieldset": { borderColor: "#666" },
+                    },
+                  }}
                 />
                 <TextField
                   label="Trade Amount ($)"
@@ -198,6 +315,14 @@ const Dashboard = ({ logout }) => {
                   value={form.amount}
                   onChange={handleInputChange}
                   required
+                  InputLabelProps={{ style: { color: "#AAA" } }}
+                  inputProps={{ style: { color: "#FFF" } }}
+                  sx={{
+                    "& .MuiOutlinedInput-root": {
+                      "& fieldset": { borderColor: "#444" },
+                      "&:hover fieldset": { borderColor: "#666" },
+                    },
+                  }}
                 />
               </Box>
             </CardContent>
@@ -205,14 +330,20 @@ const Dashboard = ({ logout }) => {
         </Grid>
       </Grid>
 
-      <Button
-        variant="contained"
-        color="secondary"
-        onClick={logout}
-        sx={{ mt: 4 }}
-      >
-        Logout
-      </Button>
+      {/* Logout Button */}
+      <Box sx={{ textAlign: "center", mt: 4 }}>
+        <Button
+          variant="contained"
+          onClick={logout}
+          sx={{
+            backgroundColor: "#3B82F6",
+            color: "#FFF",
+            "&:hover": { backgroundColor: "#2563EB" },
+          }}
+        >
+          Logout
+        </Button>
+      </Box>
     </Container>
   );
 };

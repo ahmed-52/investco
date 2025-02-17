@@ -1,5 +1,5 @@
 {
-  "name": "investco",
+  "name": "Kairo",
   "version": "1.0.0",
   "description": "",
   "main": "index.js",
@@ -10,6 +10,24 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "concurrently": "^9.1.0"
+    "@emotion/react": "^11.14.0",
+    "@emotion/styled": "^11.14.0",
+    "@mui/icons-material": "^6.4.4",
+    "@mui/joy": "^5.0.0-beta.51",
+    "@mui/material": "^6.4.4",
+    "@mui/styled-engine-sc": "^6.4.3",
+    "@mui/x-charts": "^7.26.0",
+    "@mui/x-data-grid": "^7.26.0",
+    "@mui/x-data-grid-pro": "^7.26.0",
+    "@mui/x-date-pickers": "^7.26.0",
+    "@mui/x-tree-view": "^7.26.0",
+    "@react-spring/web": "^9.7.5",
+    "concurrently": "^9.1.0",
+    "dayjs": "^1.11.13",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "react-router-dom": "^7.1.5",
+    "shadcn-ui": "^0.9.4",
+    "styled-components": "^6.1.15"
   }
 }
